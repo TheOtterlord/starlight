@@ -75,7 +75,6 @@ const { html, panels } = processPanels(panelHtml);
 
 <script>
 	class StarlightTabs extends HTMLElement {
-		// A map of sync keys to all tabs that are synced to that key.
 		static #syncedTabs = new Map<string, StarlightTabs[]>();
 
 		tabs: HTMLAnchorElement[];
@@ -129,8 +128,14 @@ const { html, panels } = processPanels(panelHtml);
 			});
 		}
 
-		switchTab(newTab: HTMLAnchorElement | null | undefined, index: number, shouldSync = true) {
+		switchTab(
+			newTab: HTMLAnchorElement | null | undefined,
+			index: number,
+			shouldSync = true
+		): [number, number] | undefined {
 			if (!newTab) return;
+
+			let prevHeight = 0;
 
 			// Mark all tabs as unselected and hide all tab panels.
 			this.tabs.forEach((tab) => {
@@ -138,6 +143,8 @@ const { html, panels } = processPanels(panelHtml);
 				tab.setAttribute('tabindex', '-1');
 			});
 			this.panels.forEach((oldPanel) => {
+				// find the current active tab, and store the height
+				if (oldPanel.hidden === false) prevHeight += oldPanel.clientHeight;
 				oldPanel.hidden = true;
 			});
 
@@ -147,24 +154,42 @@ const { html, panels } = processPanels(panelHtml);
 			// Restore active tab to the default tab order.
 			newTab.removeAttribute('tabindex');
 			newTab.setAttribute('aria-selected', 'true');
-			if (shouldSync) {
+			if (this.#syncKey && shouldSync) {
+				const height = window.scrollY ?? document.documentElement.scrollTop;
 				newTab.focus();
-				StarlightTabs.#syncTabs(this, newTab.textContent);
+				let [prevHeight, newHeight] = StarlightTabs.#syncTabs(this, newTab.textContent)!;
+				window.scrollTo(0, height - prevHeight + newHeight);
 			}
+
+			return [prevHeight, newPanel!.clientHeight];
 		}
 
-		static #syncTabs(emitter: StarlightTabs, label: string | null) {
+		static #syncTabs(emitter: StarlightTabs, label: string | null): [number, number] | undefined {
+			let prevHeight = 0;
+			let newHeight = 0;
+
 			const syncKey = emitter.#syncKey;
 			if (!syncKey || !label) return;
 			const syncedTabs = StarlightTabs.#syncedTabs.get(syncKey);
 			if (!syncedTabs) return;
 
+			let countHeight = true;
 			for (const receiver of syncedTabs) {
-				if (receiver === emitter) continue;
+				// countHeight for all tabgroups above the interaction
+				if (receiver === emitter) {
+					countHeight = false;
+					continue;
+				}
+
 				const labelIndex = receiver.tabs.findIndex((tab) => tab.textContent === label);
 				if (labelIndex === -1) continue;
-				receiver.switchTab(receiver.tabs[labelIndex], labelIndex, false);
+				let res = receiver.switchTab(receiver.tabs[labelIndex], labelIndex, false)!;
+
+				if (!countHeight) continue;
+				prevHeight += res[0] ?? 0;
+				newHeight += res[1] ?? 0;
 			}
+			return [prevHeight, newHeight];
 		}
 	}
 
