@@ -158,7 +158,10 @@ const { html, panels } = processPanels(panelHtml);
 				const height = window.scrollY ?? document.documentElement.scrollTop;
 				newTab.focus();
 				let [prevHeight, newHeight] = StarlightTabs.#syncTabs(this, newTab.textContent)!;
-				window.scrollTo(0, height - prevHeight + newHeight);
+				window.scrollTo({ top: Math.round(height - prevHeight + newHeight) });
+				console.log(height, prevHeight, newHeight, height - prevHeight + newHeight);
+        console.log(document.querySelector('#add-content')?.getBoundingClientRect().height)
+        console.log(document.querySelector('#add-content')?.clientHeight)
 			}
 
 			return [prevHeight, newPanel!.clientHeight];
